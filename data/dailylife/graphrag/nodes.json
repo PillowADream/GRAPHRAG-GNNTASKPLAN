@@ -1,0 +1,322 @@
+[
+  {
+    "id": "get_weather",
+    "aliases": [
+      "get weather",
+      "get_weather"
+    ],
+    "text": "get_weather"
+  },
+  {
+    "id": "get_news_for_topic",
+    "aliases": [
+      "get news for topic",
+      "get_news_for_topic"
+    ],
+    "text": "get_news_for_topic"
+  },
+  {
+    "id": "stock_operation",
+    "aliases": [
+      "stock operation",
+      "stock_operation"
+    ],
+    "text": "stock_operation"
+  },
+  {
+    "id": "book_flight",
+    "aliases": [
+      "book flight",
+      "book_flight"
+    ],
+    "text": "book_flight"
+  },
+  {
+    "id": "book_hotel",
+    "aliases": [
+      "book hotel",
+      "book_hotel"
+    ],
+    "text": "book_hotel"
+  },
+  {
+    "id": "book_restaurant",
+    "aliases": [
+      "book restaurant",
+      "book_restaurant"
+    ],
+    "text": "book_restaurant"
+  },
+  {
+    "id": "book_car",
+    "aliases": [
+      "book car",
+      "book_car"
+    ],
+    "text": "book_car"
+  },
+  {
+    "id": "online_shopping",
+    "aliases": [
+      "online shopping",
+      "online_shopping"
+    ],
+    "text": "online_shopping"
+  },
+  {
+    "id": "send_email",
+    "aliases": [
+      "send email",
+      "send_email"
+    ],
+    "text": "send_email"
+  },
+  {
+    "id": "send_sms",
+    "aliases": [
+      "send sms",
+      "send_sms"
+    ],
+    "text": "send_sms"
+  },
+  {
+    "id": "share_by_social_network",
+    "aliases": [
+      "share by social network",
+      "share_by_social_network"
+    ],
+    "text": "share_by_social_network"
+  },
+  {
+    "id": "search_by_engine",
+    "aliases": [
+      "search by engine",
+      "search_by_engine"
+    ],
+    "text": "search_by_engine"
+  },
+  {
+    "id": "apply_for_job",
+    "aliases": [
+      "apply for job",
+      "apply_for_job"
+    ],
+    "text": "apply_for_job"
+  },
+  {
+    "id": "see_doctor_online",
+    "aliases": [
+      "see doctor online",
+      "see_doctor_online"
+    ],
+    "text": "see_doctor_online"
+  },
+  {
+    "id": "consult_lawyer_online",
+    "aliases": [
+      "consult lawyer online",
+      "consult_lawyer_online"
+    ],
+    "text": "consult_lawyer_online"
+  },
+  {
+    "id": "enroll_in_course",
+    "aliases": [
+      "enroll in course",
+      "enroll_in_course"
+    ],
+    "text": "enroll_in_course"
+  },
+  {
+    "id": "buy_insurance",
+    "aliases": [
+      "buy insurance",
+      "buy_insurance"
+    ],
+    "text": "buy_insurance"
+  },
+  {
+    "id": "online_banking",
+    "aliases": [
+      "online banking",
+      "online_banking"
+    ],
+    "text": "online_banking"
+  },
+  {
+    "id": "daily_bill_payment",
+    "aliases": [
+      "daily bill payment",
+      "daily_bill_payment"
+    ],
+    "text": "daily_bill_payment"
+  },
+  {
+    "id": "sell_item_online",
+    "aliases": [
+      "sell item online",
+      "sell_item_online"
+    ],
+    "text": "sell_item_online"
+  },
+  {
+    "id": "do_tax_return",
+    "aliases": [
+      "do tax return",
+      "do_tax_return"
+    ],
+    "text": "do_tax_return"
+  },
+  {
+    "id": "apply_for_passport",
+    "aliases": [
+      "apply for passport",
+      "apply_for_passport"
+    ],
+    "text": "apply_for_passport"
+  },
+  {
+    "id": "pay_for_credit_card",
+    "aliases": [
+      "pay for credit card",
+      "pay_for_credit_card"
+    ],
+    "text": "pay_for_credit_card"
+  },
+  {
+    "id": "auto_housework_by_robot",
+    "aliases": [
+      "auto housework by robot",
+      "auto_housework_by_robot"
+    ],
+    "text": "auto_housework_by_robot"
+  },
+  {
+    "id": "auto_driving_to_destination",
+    "aliases": [
+      "auto driving to destination",
+      "auto_driving_to_destination"
+    ],
+    "text": "auto_driving_to_destination"
+  },
+  {
+    "id": "deliver_package",
+    "aliases": [
+      "deliver package",
+      "deliver_package"
+    ],
+    "text": "deliver_package"
+  },
+  {
+    "id": "order_food_delivery",
+    "aliases": [
+      "order food delivery",
+      "order_food_delivery"
+    ],
+    "text": "order_food_delivery"
+  },
+  {
+    "id": "order_taxi",
+    "aliases": [
+      "order taxi",
+      "order_taxi"
+    ],
+    "text": "order_taxi"
+  },
+  {
+    "id": "play_music_by_title",
+    "aliases": [
+      "play music by title",
+      "play_music_by_title"
+    ],
+    "text": "play_music_by_title"
+  },
+  {
+    "id": "play_movie_by_title",
+    "aliases": [
+      "play movie by title",
+      "play_movie_by_title"
+    ],
+    "text": "play_movie_by_title"
+  },
+  {
+    "id": "take_note",
+    "aliases": [
+      "take note",
+      "take_note"
+    ],
+    "text": "take_note"
+  },
+  {
+    "id": "borrow_book_online",
+    "aliases": [
+      "borrow book online",
+      "borrow_book_online"
+    ],
+    "text": "borrow_book_online"
+  },
+  {
+    "id": "recording_audio",
+    "aliases": [
+      "recording audio",
+      "recording_audio"
+    ],
+    "text": "recording_audio"
+  },
+  {
+    "id": "make_video_call",
+    "aliases": [
+      "make video call",
+      "make_video_call"
+    ],
+    "text": "make_video_call"
+  },
+  {
+    "id": "make_voice_call",
+    "aliases": [
+      "make voice call",
+      "make_voice_call"
+    ],
+    "text": "make_voice_call"
+  },
+  {
+    "id": "organize_meeting_online",
+    "aliases": [
+      "organize meeting online",
+      "organize_meeting_online"
+    ],
+    "text": "organize_meeting_online"
+  },
+  {
+    "id": "attend_meeting_online",
+    "aliases": [
+      "attend meeting online",
+      "attend_meeting_online"
+    ],
+    "text": "attend_meeting_online"
+  },
+  {
+    "id": "software_management",
+    "aliases": [
+      "software management",
+      "software_management"
+    ],
+    "text": "software_management"
+  },
+  {
+    "id": "print_document",
+    "aliases": [
+      "print document",
+      "print_document"
+    ],
+    "text": "print_document"
+  },
+  {
+    "id": "set_alarm",
+    "aliases": [
+      "set alarm",
+      "set_alarm"
+    ],
+    "text": "set_alarm"
+  }
+]
