@@ -7,9 +7,30 @@ import asyncio
 import time
 import sys
 import re
-sys.path.append("../")
+from pathlib import Path
+
+# ----------------- repo root & sys.path -----------------
+def _repo_root() -> Path:
+    """
+    Locate the repository root by walking up from this file
+    until a directory containing 'data' is found.
+    """
+    here = Path(__file__).resolve()
+    for p in (here.parent, *here.parents):
+        if (p / "data").exists():
+            return p
+    # fallback: parent of this file (works if script placed under repo/<pkg>/)
+    return here.parent
+
+# ensure we can import `utils` no matter where we run the module from
+_root = _repo_root()
+if str(_root) not in sys.path:
+    sys.path.append(str(_root))
+
 from utils import get_cur_time
 from utils.runlog import open_jsonl, log_sample
+# --------------------------------------------------------
+
 
 # ----------------- helpers -----------------
 def _clean_code_fences(s: str) -> str:
@@ -33,8 +54,7 @@ def _extract_json_span(s: str) -> str:
 def _try_parse_json(text: str):
     """best-effort parse: remove fences, slice outermost json span, then json.loads"""
     text = _clean_code_fences(text)
-    text = text.replace("\_", "_")  # keep original repo behavior
-    # don't blanket-remove backslashes/newlines (may be valid in JSON strings)
+    text = text.replace("\\_", "_")  # keep original repo behavior
     candidate = _extract_json_span(text)
     return json.loads(candidate)
 
@@ -131,7 +151,7 @@ async def inference_one_case(
         "frequency_penalty": 0,
         "presence_penalty": 1.05,
         "max_tokens": 2000,
-        # 关键：禁用流式并要求 JSON
+        # 禁用流式并要求 JSON
         "stream": False,
         "response_format": {"type": "json_object"},
     }
@@ -161,7 +181,7 @@ async def inference_one_case(
             returned_content[k] = []
     if not isinstance(returned_content["task_nodes"], list):
         returned_content["task_nodes"] = []
-    if not returned_content["task_links"] and returned_content["task_nodes"]:
+    if not returned_content["task_links"] and returned_content["task_nodes"] and isinstance(returned_content["task_nodes"][0], dict):
         returned_content["task_links"] = _linear_links(returned_content["task_nodes"])
     # -------------------------------------
 
@@ -279,10 +299,10 @@ def main(dataset, temperature, top_p, api_addr, api_port, llm, use_demos, multiw
     print("= " * 20)
     print("## Starting Time:", get_cur_time(), flush=True)
 
-    # 允许用 OPENAI_BASE_URL 覆盖（例如 Ollama: http://127.0.0.1:11434/v1）
-    base_url = os.getenv("OPENAI_BASE_URL", None)
-    if base_url:
-        url = base_url.rstrip("/") + "/chat/completions"
+    # base URL: OPENAI_BASE_URL 优先（例如 Ollama -> http://127.0.0.1:11434/v1）
+    base_url_env = os.getenv("OPENAI_BASE_URL", None)
+    if base_url_env:
+        url = base_url_env.rstrip("/") + "/chat/completions"
     else:
         url = f"http://{api_addr}:{api_port}/v1/chat/completions"
 
@@ -295,20 +315,36 @@ def main(dataset, temperature, top_p, api_addr, api_port, llm, use_demos, multiw
         "CodeLlama-7b-Instruct-hf": "CodeLlama-7b",
         "Baichuan2-13B-Chat": "Baichuan-13b",
     }
-    # 兼容未知模型名（如 ollama 的 "codellama:13b-instruct"）
-    llm_short = llm_short_names.get(llm, llm)
-    prediction_dir = f"../prediction/{dataset}/{llm_short}"
+    llm_short = llm_short_names.get(llm, llm)  # fallback to raw name
 
-    infer_step_file = f"{prediction_dir}/direct.json"
+    # -------- paths (rooted) --------
+    root = _repo_root()
+    data_dir = (root / "data" / dataset).resolve()
+    if not data_dir.exists():
+        raise FileNotFoundError(f"Data directory not found: {data_dir}")
 
-    if not os.path.exists(prediction_dir):
-        os.makedirs(prediction_dir, exist_ok=True)
+    runs_dir = (root / "runs" / dataset / "base").resolve()
+    runs_dir.mkdir(parents=True, exist_ok=True)
 
-    alignment = json.load(open(f"../data/{dataset}/split_ids.json", "r", encoding="utf-8"))["test_ids"]
-    alignment_ids = alignment["chain"]
+    prediction_dir = (root / "prediction" / dataset / llm_short).resolve()
+    prediction_dir.mkdir(parents=True, exist_ok=True)
 
+    infer_step_file = prediction_dir / "direct.json"
+    print(str(infer_step_file))
+
+    # -------- alignment / splits --------
+    split_path = data_dir / "split_ids.json"
+    if not split_path.exists():
+        raise FileNotFoundError(f"split_ids.json not found: {split_path}")
+    with open(split_path, "r", encoding="utf-8") as f:
+        alignment = json.load(f).get("test_ids")
+    if alignment is None:
+        raise KeyError(f"'test_ids' not found in {split_path}")
+    alignment_ids = alignment.get("chain", alignment)  # 兼容 test_ids 直接是列表的情况
+
+    # -------- already inferred --------
     has_inferenced = []
-    if os.path.exists(infer_step_file):
+    if infer_step_file.exists():
         with open(infer_step_file, "r", encoding="utf-8") as rf:
             for line in rf:
                 try:
@@ -317,25 +353,30 @@ def main(dataset, temperature, top_p, api_addr, api_port, llm, use_demos, multiw
                 except Exception:
                     continue
 
-    with open(f"../data/{dataset}/user_requests.json", "r", encoding="utf-8") as user_request_file:
-        inputs = []
+    # -------- inputs --------
+    user_requests_path = data_dir / "user_requests.json"
+    if not user_requests_path.exists():
+        raise FileNotFoundError(f"user_requests.json not found: {user_requests_path}")
+
+    inputs = []
+    with open(user_requests_path, "r", encoding="utf-8") as user_request_file:
         for line in user_request_file:
             item = json.loads(line)
             if item["id"] not in has_inferenced and item["id"] in alignment_ids:
                 inputs.append(item)
 
     write_file = open(infer_step_file, "a", encoding="utf-8")
-    print(infer_step_file)
 
-    # Prepare Tool String to prompt LLM
-    tool_list = json.load(open(f"../data/{dataset}/tool_desc.json", "r", encoding="utf-8"))["nodes"]
-    tool_string = "# TASK LIST #:\n"
-    for k, tool in enumerate(tool_list):
-        tool_string += json.dumps(tool, ensure_ascii=False) + "\n"
+    # -------- tool list --------
+    tool_desc_path = data_dir / "tool_desc.json"
+    if not tool_desc_path.exists():
+        raise FileNotFoundError(f"tool_desc.json not found: {tool_desc_path}")
+    tool_list = json.load(open(tool_desc_path, "r", encoding="utf-8"))["nodes"]
+    tool_string = "# TASK LIST #:\n" + "\n".join(json.dumps(t, ensure_ascii=False) for t in tool_list)
 
-    # Prepare Demo(s) String to prompt LLM
+    # -------- demos --------
     demo_string = ""
-    demos_id = []  # 防 use_demos=0 时未定义
+    demos_id = []
     if use_demos:
         demos_id_list = {
             "huggingface": ["10523150", "14611002", "22067492"],
@@ -344,37 +385,39 @@ def main(dataset, temperature, top_p, api_addr, api_port, llm, use_demos, multiw
             "tmdb": [1],
             "ultratool": ["691"],
         }
+        demos_id = demos_id_list.get(dataset, [])[:use_demos]
 
-        demos_id = demos_id_list[dataset][:use_demos]
+        demos_data_path = data_dir / "data.json"
+        if demos_id and not demos_data_path.exists():
+            raise FileNotFoundError(f"data.json for demos not found: {demos_data_path}")
 
-        with open(f"../data/{dataset}/data.json", "r", encoding="utf-8") as demos_rf:
+        if demos_id:
             demos = []
-            for line in demos_rf:
-                data = json.loads(line)
-                if data["id"] in demos_id:
-                    demo = {
-                        "user_request": data["user_request"],
-                        "result": {
-                            "task_steps": data["task_steps"],
-                            "task_nodes": data["task_nodes"],
-                            "task_links": data["task_links"],
-                        },
-                    }
-                    demos.append(demo)
+            with open(demos_data_path, "r", encoding="utf-8") as demos_rf:
+                for line in demos_rf:
+                    data = json.loads(line)
+                    if data["id"] in demos_id:
+                        demo = {
+                            "user_request": data["user_request"],
+                            "result": {
+                                "task_steps": data["task_steps"],
+                                "task_nodes": data["task_nodes"],
+                                "task_links": data["task_links"],
+                            },
+                        }
+                        demos.append(demo)
 
-        if len(demos) > 0:
-            demo_string += "\nHere are provided examples for your reference.\n"
-            for demo in demos:
-                demo_string += (
-                    f'\n# EXAMPLE #:\n# USER REQUEST #: {demo["user_request"]}\n'
-                    f'# RESULT #: {json.dumps(demo["result"], ensure_ascii=False)}'
-                )
+            if len(demos) > 0:
+                demo_string += "\nHere are provided examples for your reference.\n"
+                for demo in demos:
+                    demo_string += (
+                        f'\n# EXAMPLE #:\n# USER REQUEST #: {demo["user_request"]}\n'
+                        f'# RESULT #: {json.dumps(demo["result"], ensure_ascii=False)}'
+                    )
 
-    # Set up multi-worker
+    # -------- concurrency & logging --------
     sem = asyncio.Semaphore(multiworker)
-
-    # 打开统一 JSONL 日志
-    log_fp = open_jsonl(f"runs/{dataset}/base/direct.jsonl")
+    log_fp = open_jsonl(str(runs_dir / "direct.jsonl"))
 
     resp_type = dataset in ["huggingface", "multimedia"]
 

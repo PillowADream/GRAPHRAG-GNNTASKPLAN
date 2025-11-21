@@ -26,7 +26,7 @@ ROOT: Path = _repo_root()
 def convert_sp_mat_to_sp_tensor(X):
     """scipy.sparse -> torch sparse COO tensor (float32)."""
     coo = X.tocoo().astype(np.float32)
-    indices = torch.tensor([coo.row, coo.col], dtype=torch.long)
+    indices = torch.from_numpy(np.stack([coo.row, coo.col], axis=0)).long()
     values = torch.tensor(coo.data, dtype=torch.float32)
     return torch.sparse_coo_tensor(indices, values, size=coo.shape)
 

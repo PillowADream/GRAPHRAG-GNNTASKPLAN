@@ -1,0 +1,2 @@
+file,samples,PSR,Node-F1,Link-F1,Latency,NH-1,NH-2,LH-1,LH-2,TokPrompt,TokResp,RAG-Trig,ToolExec-Consistency,Param-F1
+,94,0.9894,0.6121,0.295,22.0967,0.0106,0.3298,0.1489,0.5603,6315.9787,1470.1064,1.0,0.198,0.0835

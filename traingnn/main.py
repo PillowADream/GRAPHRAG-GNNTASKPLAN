@@ -389,6 +389,16 @@ if __name__ == "__main__":
     parser.add_argument('--structure_hard_negative', type=int, default=1, choices=[0, 1])
     parser.add_argument('--rag_lr', type=float, default=1e-3)
     parser.add_argument('--rag_candidates_topk', type=int, default=0, help='>0 to enable RAG candidate pruning (no fusion, no GNN)')
+    # ---- New: RAG(cands) 最小分数阈值（用于评测阶段的子库检索）----
+    parser.add_argument('--min_rag_score', type=float, default=0.0,
+                        help='RAG-only 检索的最小余弦相似度阈值（0~1）；仅对 --rag_candidates_topk>0 的评测分支生效')
+
+    # ---- New: 融合门正则（将门均值拉到一个目标附近，避免饱和）----
+    parser.add_argument('--gate_center', type=float, default=0.65,
+                        help='门均值的目标中心（建议 0.6~0.7）')
+    parser.add_argument('--gate_reg', type=float, default=0.0,
+                        help='门正则系数（>0 开启）；损失 = gate_reg * (mean(gate)-gate_center)^2')
+
 
     # === M2 中已有 ===
     parser.add_argument('--reset_rag_head', type=int, default=0, choices=[0, 1])
@@ -612,11 +622,18 @@ if __name__ == "__main__":
             comm_ids=getattr(controller, "comm_ids", None)
         ).detach().cpu().numpy()
 
-        def _cosine_topk(v: np.ndarray, M: np.ndarray, k: int) -> np.ndarray:
+        def _cosine_topk(v: np.ndarray, M: np.ndarray, k: int, min_score: float = 0.0) -> np.ndarray:
             vn = v / (np.linalg.norm(v) + 1e-8)
             Mn = M / (np.linalg.norm(M, axis=1, keepdims=True) + 1e-8)
-            s = Mn @ vn  # (N,)
-            return np.argpartition(-s, kth=min(k, len(s)-1))[:k]
+            s  = Mn @ vn  # (N,)
+            # 先挑出一个稍大的候选集合，再按分数降序+阈值裁剪
+            kk  = min(len(s), max(k, k * 4))
+            idx = np.argpartition(-s, kth=kk - 1)[:kk]
+            idx = idx[np.argsort(-s[idx])]  # 降序
+            if min_score > 0.0:
+                idx = idx[s[idx] >= float(min_score)]
+            return idx[:k]
+
 
     # 输出目录：如果启用 M3（anti_freq / inv_reg），写到 ragfeat_af_inv
     if args.anti_freq or args.inv_reg > 0:
@@ -763,7 +780,7 @@ if __name__ == "__main__":
             score_dict, cur_candidates = bi_evaluate(new_alignment_ids, final_pred_dict)
             candidate_example_ids = set(cur_candidates) if not candidate_example_ids else (candidate_example_ids & set(cur_candidates))
             table.add_row([args.dataset, base_llm, lm_name, 'direct',
-                           score_dict['base-node-f1'], score_dict['base-link-f1'], score_dict["base-acc"]])
+                        score_dict['base-node-f1'], score_dict['base-link-f1'], score_dict["base-acc"]])
 
             # ===== 2) +ragF (no-GNN) =====
             final_pred_dict_static = {}
@@ -791,7 +808,7 @@ if __name__ == "__main__":
 
             score_dict_static, _ = bi_evaluate(new_alignment_ids, final_pred_dict_static)
             table.add_row([args.dataset, base_llm, lm_name, '+ragF (no-GNN)',
-                           score_dict_static['search-node-f1'], score_dict_static['search-link-f1'], score_dict_static["search-acc"]])
+                        score_dict_static['search-node-f1'], score_dict_static['search-link-f1'], score_dict_static["search-acc"]])
             _print_buckets_and_hallu("+ragF (no-GNN)", new_alignment_ids, final_pred_dict_static)
 
             # ===== 3) +RAG(cands)（可选）=====
@@ -802,7 +819,10 @@ if __name__ == "__main__":
                     steps_emb = controller.model.lm_forward(steps, max_length=64, batch_size=len(steps)+1).detach().cpu().numpy()
                     q = steps_emb.mean(axis=0, keepdims=False)
                     cand_bank = tool_emb_static  # 用融合后的 RAG(no-GNN) 作为检索库
-                    top_idx = _cosine_topk(q, cand_bank, k=int(args.rag_candidates_topk))
+                    top_idx = _cosine_topk(
+                        q, cand_bank, k=int(args.rag_candidates_topk),
+                        min_score=float(getattr(args, "min_rag_score", 0.0))
+                    )
                     top_idx = np.unique(top_idx)
                     index2tool_sub = [index2tool[i] for i in top_idx]
                     idx_map = {name: i for i, name in enumerate(index2tool_sub)}
@@ -827,44 +847,65 @@ if __name__ == "__main__":
 
                 score_dict_cand, _ = bi_evaluate(new_alignment_ids, final_pred_dict_cand)
                 table.add_row([args.dataset, base_llm, lm_name, '+RAG(cands)',
-                               score_dict_cand['search-node-f1'], score_dict_cand['search-link-f1'], score_dict_cand["search-acc"]])
+                            score_dict_cand['search-node-f1'], score_dict_cand['search-link-f1'], score_dict_cand["search-acc"]])
                 _print_buckets_and_hallu("+RAG(cands)", new_alignment_ids, final_pred_dict_cand)
 
             # ===== 4) +GCN+ragF（完整）=====
             gnn_tag = f"+{args.gnn_name}{'+ragF' if args.use_rag_feat else ''}"
             table.add_row([args.dataset, base_llm, lm_name, gnn_tag,
-                           score_dict['search-node-f1'], score_dict['search-link-f1'], score_dict["search-acc"]])
+                        score_dict['search-node-f1'], score_dict['search-link-f1'], score_dict["search-acc"]])
             _print_buckets_and_hallu(gnn_tag, new_alignment_ids, final_pred_dict)
 
-            # ===== 5) （可选）同构鲁棒性评测 =====
+            # canon_names = list(index2tool)
+            # ===== 5) （可选）同构鲁棒性评测（新实现） =====
             if args.robust_iso:
                 print("[Robust-Iso] start ...")
-                from copy import deepcopy
+                import numpy as np
+                import torch
+
                 nf1_list, lf1_list = [], []
-                for _ in range(int(args.robust_iso_trials)):
-                    # 生成一次随机置换并前向
+
+                for _trial in range(int(args.robust_iso_trials)):
+                    # 1) 对工具图做一次随机置换（节点重标 + 邻接、RAG特征一起置换）
                     perm, inv_perm, texts_p, adj_p, feat_p, comm_p = permute_graph_inputs(
-                        tool_texts, tool_adj, getattr(controller, "rag_feat", None), getattr(controller, "comm_ids", None), device
+                        tool_texts,
+                        tool_adj,  # 注意：这里用的是 edge_index（已经在前面 .to(device) 了）
+                        getattr(controller, "rag_feat", None),
+                        getattr(controller, "comm_ids", None),
+                        device,
                     )
+
+                    # 2) 在置换图上前向一遍，再把输出对齐回原始顺序
                     with torch.no_grad():
                         tool_emb_p = controller.model.tool_forward(
-                            texts_p, adj_p,
-                            rag_feat=feat_p, comm_ids=comm_p
-                        )
-                        # 还原到原顺序
-                        tool_emb_p = tool_emb_p[inv_perm].detach().cpu().numpy()
+                            texts_p,
+                            adj_p,
+                            rag_feat=feat_p,
+                            comm_ids=comm_p,
+                        )  # [N, D]，索引顺序 = perm 后的新顺序
+                        # 映回原始顺序：第 i 行对应原始第 i 个工具
+                        tool_emb_iso = tool_emb_p[inv_perm].detach().cpu().numpy()
 
-                    # 重跑检索
+                    # 3) 用“同一套 index2tool / adj_g / eval 逻辑”做检索，只换了 embedding
                     pred_iso = {}
                     for data_id in new_alignment_ids:
                         steps = pred_content_dict[data_id]["steps"]
-                        steps_emb = controller.model.lm_forward(steps, max_length=64, batch_size=len(steps)+1).detach().cpu().numpy()
-                        ans = sequence_greedy_tool_selection(steps_emb, tool_emb_p, index2tool, adj_g, measure=args.measure)
+                        steps_emb = controller.model.lm_forward(
+                            steps, max_length=64, batch_size=len(steps) + 1, device=device
+                        ).detach().cpu().numpy()
+
+                        ans = sequence_greedy_tool_selection(
+                            steps_emb,
+                            tool_emb_iso,
+                            index2tool,   # 保持原始工具名顺序
+                            adj_g,        # 保持原始邻接（按名字）
+                            measure=args.measure,
+                        )
 
                         base_nodes = pred_content_dict[data_id]["pred_task_nodes"]
                         base_links = pred_content_dict[data_id]["pred_task_links"]
-                        gt_nodes = pred_content_dict[data_id]["gt_task_nodes"]
-                        gt_links = pred_content_dict[data_id]["gt_task_links"]
+                        gt_nodes   = pred_content_dict[data_id]["gt_task_nodes"]
+                        gt_links   = pred_content_dict[data_id]["gt_task_links"]
 
                         pred_iso[data_id] = {
                             "steps": steps,
@@ -873,15 +914,28 @@ if __name__ == "__main__":
                             "search_nodes": ans["task_nodes"],
                             "search_links": ans["task_links"],
                             "gt_nodes": gt_nodes,
-                            "gt_links": gt_links
+                            "gt_links": gt_links,
                         }
 
+                    # 4) 评测 F1
                     s_iso, _ = bi_evaluate(new_alignment_ids, pred_iso)
-                    nf1_list.append(s_iso['search-node-f1'])
-                    lf1_list.append(s_iso['search-link-f1'])
+                    nf1_list.append(s_iso["search-node-f1"])
+                    lf1_list.append(s_iso["search-link-f1"])
 
-                print(f"[Robust-Iso] Node-F1 avg={np.mean(nf1_list):.4f} ± {np.std(nf1_list):.4f} | "
-                      f"Link-F1 avg={np.mean(lf1_list):.4f} ± {np.std(lf1_list):.4f}")
+                print(
+                    f"[Robust-Iso] Node-F1 avg={np.mean(nf1_list):.4f} ± {np.std(nf1_list):.4f} | "
+                    f"Link-F1 avg={np.mean(lf1_list):.4f} ± {np.std(lf1_list):.4f}"
+                )
+                if len(new_alignment_ids) > 0:
+                    did = new_alignment_ids[0]
+                    print(
+                        "[DEBUG] example overlap:",
+                        set(pred_iso[did]["search_nodes"]) & set(pred_iso[did]["gt_nodes"]),
+                    )
+
+
+
+
 
     log_fp.close()
     print(table)

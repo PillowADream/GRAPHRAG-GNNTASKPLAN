@@ -65,6 +65,7 @@ class LMGNNModel(nn.Module):
         self.rag_proj: Optional[nn.Linear] = None
         self.rag_gate: Optional[nn.Linear] = None
         self.rag_dropout = nn.Dropout(getattr(args, "rag_dropout", 0.1))
+        self._gate_mean_current: Optional[torch.Tensor] = None  # New: 当前前向批次的 gate 均值（参与反传）
 
         # alpha 采用 reparam：alpha = cap * sigmoid(_rag_alpha_raw)
         self._rag_alpha_cap: float = 0.6
@@ -212,6 +213,9 @@ class LMGNNModel(nn.Module):
 
         delta = torch.tanh(self.rag_proj(f))        # (N, H)
         gate  = torch.sigmoid(self.rag_gate(f))     # (N, H)
+        gate  = torch.clamp(gate, 1e-3, 1.0 - 1e-3)  # New: 数值稳健，避免饱和
+        self._gate_mean_current = gate.mean()         # New: 记录本次前向的 gate 均值（保留梯度）
+
 
         fused = t + self.rag_alpha() * gate * delta
         return fused
@@ -580,6 +584,12 @@ class ModelTrainer:
                 comm_ids=self.comm_ids,
                 pair_weight=pair_weight if (pair_weight is not None) else None
             )
+            # === New: 融合门正则（用“本批前向”的 gate，可反传） ===
+            if float(getattr(self.args, "gate_reg", 0.0)) > 0.0:
+                gm = getattr(self.model, "_gate_mean_current", None)
+                if gm is not None:
+                    loss_main = loss_main + float(self.args.gate_reg) * (gm - float(self.args.gate_center)) ** 2
+
 
             # === 同构不变性正则（每 inv_every 步触发一次）===
             loss_inv = torch.tensor(0.0, device=self.device)
@@ -605,6 +615,23 @@ class ModelTrainer:
                 emb_base = F.normalize(emb_base, dim=-1)
                 emb_perm = F.normalize(emb_perm, dim=-1)
                 loss_inv = (1.0 - (emb_base * emb_perm).sum(dim=-1)).mean()
+
+            if float(getattr(self.args, "gate_reg", 0.0)) > 0.0:
+                gate_mean_batch = None
+                if (self.rag_feat is not None) and getattr(self.model, "rag_gate", None) is not None:
+                    with torch.no_grad():
+                        parts = [self.rag_feat.to(self.device)]
+                        if (self.comm_ids is not None) and (self.model.comm_emb is not None):
+                            parts.append(self.model.comm_emb(self.comm_ids.to(self.device)))
+                        feat = torch.cat(parts, dim=1) if len(parts) > 1 else parts[0]
+                        f = self.model.rag_ln_feat(feat)
+                        f = self.model.rag_dropout(f)
+                        g = torch.sigmoid(self.model.rag_gate(f))
+                        gate_mean_batch = g.mean()
+
+                if gate_mean_batch is not None:
+                    tgt = float(getattr(self.args, "gate_center", 0.65))
+                    loss_main = loss_main + float(self.args.gate_reg) * (gate_mean_batch - tgt) ** 2
 
             loss = loss_main + inv_reg_lambda * loss_inv
 
