@@ -1,4 +1,4 @@
-import sys 
+import sys
 import argparse
 import torch
 from transformers import AutoTokenizer, AutoModel
@@ -9,13 +9,14 @@ import prettytable as pt
 import time
 sys.path.append("../")
 from utils import TextDataset, load_tool, load_test_data, sequence_greedy_tool_selection
+from utils.runlog import open_jsonl, log_sample
 from evaluate import f1_score
 import warnings
 warnings.filterwarnings('ignore')
 
 
 def mean_pooling(model_output, attention_mask):
-    token_embeddings = model_output[0] 
+    token_embeddings = model_output[0]
     input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
     return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
@@ -24,11 +25,11 @@ def bi_evaluate(id_list, pred_dict, tmp_print=False):
     init_scores, searched_scores, cost_times = [], [], []
 
     for data_id in id_list:
-        content = pred_dict[data_id] 
-        
+        content = pred_dict[data_id]
+
         gt_node, gt_link = content["gt_nodes"], content["gt_links"]
         pred_node, pred_link = content["pred_nodes"], content["pred_links"]
-            
+
         search_node = content['search_nodes']
         search_link = [", ".join(link) for link in content["search_links"]]
 
@@ -37,7 +38,6 @@ def bi_evaluate(id_list, pred_dict, tmp_print=False):
         init_succ, search_succ = float(node_f1 >= 0.99), float(search_node_f1 >= 0.99)
 
         init_scores.append([node_f1, link_f1, init_succ])
-
         searched_scores.append([search_node_f1, search_link_f1, search_succ])
         cost_times.append(content["cost_time"])
 
@@ -46,7 +46,7 @@ def bi_evaluate(id_list, pred_dict, tmp_print=False):
     if tmp_print:
         print(f"Init   [Node-F1] {avg_pred_score[0]:.4f} [Link-F1] {avg_pred_score[1]:.4f}")
         print(f"Search [Node-F1] {avg_searched_score[0]:.4f} [Link-F1] {avg_searched_score[1]:.4f}")
-    
+
     return {
         "base-node-f1": avg_pred_score[0],
         "base-link-f1": avg_pred_score[1],
@@ -62,7 +62,7 @@ def text_lm_forward(text, max_length=256, batch_size=256, pool="cls"):
     x = tokenizer(text, padding=True, truncation=True, max_length=max_length)
     format_data = TextDataset(x)
 
-    text_emb = None 
+    text_emb = None
     dataloader = DataLoader(format_data, shuffle=False, batch_size=batch_size)
 
     for batch in dataloader:
@@ -72,13 +72,13 @@ def text_lm_forward(text, max_length=256, batch_size=256, pool="cls"):
             attention_mask=batch['attention_mask'],
             output_hidden_states=True,
         )
-        
+
         if pool == "cls":
             emb = output['hidden_states'][-1]
             cls_token_emb = emb.permute(1, 0, 2)[0]
         else:
             cls_token_emb = mean_pooling(output, batch["attention_mask"])
-        
+
         token_emb = cls_token_emb.cpu().detach().numpy()
         if text_emb is None:
             text_emb = token_emb
@@ -90,22 +90,25 @@ def text_lm_forward(text, max_length=256, batch_size=256, pool="cls"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dataset', type=str, default='huggingface', choices=['huggingface', 'multimedia', 'dailylife', 'tmdb'])
-    parser.add_argument('--lm_name', type=str, default='intfloat/e5-large', choices=['intfloat/e5-large', 'sentence-transformers/all-roberta-large-v1', 'intfloat/e5-large-v2'])
+    parser.add_argument('--dataset', type=str, default='huggingface',
+                        choices=['huggingface', 'multimedia', 'dailylife', 'tmdb'])
+    parser.add_argument('--lm_name', type=str, default='intfloat/e5-large',
+                        choices=['intfloat/e5-large', 'sentence-transformers/all-roberta-large-v1', 'intfloat/e5-large-v2'])
     parser.add_argument('--lm_pool', type=str, default="cls", choices=['mean', 'cls'])
     # LLM Choices ['CodeLlama-13b', 'mistral-7b', 'Baichuan-13b', 'CodeLlama-7b', 'vicuna-13b']
     parser.add_argument('--llm_name', type=str, default='CodeLlama-13b')
 
-    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--device', type=str, default='cuda:0')
     parser.add_argument('--use_graph', type=int, default=1)
-    parser.add_argument('--alpha_list', type=list, default=[0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]) 
+    parser.add_argument('--alpha_list', type=list,
+                        default=[0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0])
     parser.add_argument('--measure', type=str, default='distance', choices=['distance', 'dot'])
 
     args = parser.parse_args()
     print(args, "\n")
     device = torch.device(args.device)
 
+    # ====== data & encoder ======
     tool_texts, tool2index, index2tool, _, link_g, adj_g = load_tool(dataset_name=args.dataset)
 
     tokenizer = AutoTokenizer.from_pretrained(args.lm_name)
@@ -126,13 +129,17 @@ if __name__ == "__main__":
             tool_emb_list.append(cur_tool_emb)
 
     alignment_ids = json.load(open(f"../data/{args.dataset}/split_ids.json", 'r'))["test_ids"]["chain"]
-    
+
     # for "method", you can also replace with other prompting methods
-    new_alignment_ids, pred_dict = load_test_data(args.dataset, args.llm_name, init_alignment_ids=alignment_ids, method="direct")
-    
-    # for computing Hallucination
+    new_alignment_ids, pred_dict = load_test_data(args.dataset, args.llm_name,
+                                                  init_alignment_ids=alignment_ids, method="direct")
+
+    # for computing Hallucination (not used here but kept for compatibility)
     valid_nodes = [node["id"] for node in json.load(open(f"../data/{args.dataset}/tool_desc.json", 'r'))["nodes"]]
     valid_links = [", ".join([link["source"], link["target"]]) for link in json.load(open(f"../data/{args.dataset}/graph_desc.json", 'r'))["links"]]
+
+    # ====== unified JSONL logging ======
+    log_fp = open_jsonl(f"runs/{args.dataset}/base/sgc.jsonl")
 
     if args.use_graph:
         tb = pt.PrettyTable()
@@ -141,34 +148,64 @@ if __name__ == "__main__":
 
         for idx in range(len(tool_emb_list)):
             final_pred_dict = {}
+            alpha_val = args.alpha_list[idx] if idx != len(args.alpha_list) - 1 else "No Graph"
 
             for data_id in new_alignment_ids:
                 st_time = time.time()
                 steps = pred_dict[data_id]["steps"]
-          
+
                 steps_emb = text_lm_forward(steps, max_length=64, batch_size=len(steps)+1, pool=args.lm_pool)
                 ans = sequence_greedy_tool_selection(steps_emb, tool_emb_list[idx], index2tool, adj_g, measure=args.measure)
-                
+
+                # 逐样本 metrics
+                gt_nodes = pred_dict[data_id]["gt_task_nodes"]
+                gt_links = pred_dict[data_id]["gt_task_links"]
+                base_nodes = pred_dict[data_id]["pred_task_nodes"]
+                base_links = pred_dict[data_id]["pred_task_links"]
+                search_nodes = ans["task_nodes"]
+                search_links = [", ".join(link) for link in ans["task_links"]]
+
+                node_f1_base = f1_score(base_nodes, gt_nodes)
+                link_f1_base = f1_score(base_links, gt_links)
+                node_f1_search = f1_score(search_nodes, gt_nodes)
+                link_f1_search = f1_score(search_links, gt_links)
+                succ = bool(node_f1_search >= 0.99)
+
+                cost_t = time.time() - st_time
+
                 final_pred_dict[data_id] = {
                     "steps": steps,
-                    "pred_nodes": pred_dict[data_id]["pred_task_nodes"],
-                    "pred_links": pred_dict[data_id]["pred_task_links"],
+                    "pred_nodes": base_nodes,
+                    "pred_links": base_links,
                     "search_nodes": ans["task_nodes"],
                     "search_links": ans["task_links"],
-                    "gt_nodes": pred_dict[data_id]["gt_task_nodes"],
-                    "gt_links": pred_dict[data_id]["gt_task_links"],
-                    "cost_time": time.time() - st_time
+                    "gt_nodes": gt_nodes,
+                    "gt_links": gt_links,
+                    "cost_time": cost_t
                 }
+
+                # 写一条 JSONL 日志（以搜索结果为准；base 指标附在 err 字段末尾也可，这里只写 search）
+                log_sample(
+                    fp=log_fp, ds=args.dataset, method="sgc", llm=args.llm_name, seed=0,
+                    sid=data_id, success=succ, latency_sec=round(cost_t, 4),
+                    tokens_prompt=None, tokens_completion=None,
+                    temperature=None, top_p=None, alpha=(None if alpha_val == "No Graph" else float(alpha_val)),
+                    graphsearch=None,
+                    task_steps=steps, task_nodes=search_nodes, task_links=ans["task_links"],
+                    err=None
+                )
 
             score_dict = bi_evaluate(new_alignment_ids, final_pred_dict)
             if idx == 0:
-                tb.add_row([args.dataset, args.llm_name, lm_name, 'Direct', score_dict['base-node-f1'], score_dict['base-link-f1'], score_dict['base-acc']])
-            alpha_name = args.alpha_list[idx] if idx != len(args.alpha_list) - 1 else "No Graph"
-            tb.add_row([args.dataset, args.llm_name, lm_name, alpha_name, score_dict['search-node-f1'], score_dict['search-link-f1'], score_dict['search-acc']])
-        
+                tb.add_row([args.dataset, args.llm_name, lm_name, 'Direct',
+                            score_dict['base-node-f1'], score_dict['base-link-f1'], score_dict['base-acc']])
+            tb.add_row([args.dataset, args.llm_name, lm_name, alpha_val,
+                        score_dict['search-node-f1'], score_dict['search-link-f1'], score_dict['search-acc']])
+
         print(tb)
     else:
         final_pred_dict = {}
+        alpha_val = None
         for data_id in new_alignment_ids:
             st_time = time.time()
             steps = pred_dict[data_id]["steps"]
@@ -176,15 +213,41 @@ if __name__ == "__main__":
             steps_emb = text_lm_forward(steps, max_length=64, batch_size=len(steps)+1, pool=args.lm_pool)
             ans = sequence_greedy_tool_selection(steps_emb, tool_emb, index2tool, adj_g, measure=args.measure)
 
+            gt_nodes = pred_dict[data_id]["gt_task_nodes"]
+            gt_links = pred_dict[data_id]["gt_task_links"]
+            base_nodes = pred_dict[data_id]["pred_task_nodes"]
+            base_links = pred_dict[data_id]["pred_task_links"]
+            search_nodes = ans["task_nodes"]
+            search_links = [", ".join(link) for link in ans["task_links"]]
+
+            node_f1_base = f1_score(base_nodes, gt_nodes)
+            link_f1_base = f1_score(base_links, gt_links)
+            node_f1_search = f1_score(search_nodes, gt_nodes)
+            link_f1_search = f1_score(search_links, gt_links)
+            succ = bool(node_f1_search >= 0.99)
+
+            cost_t = time.time() - st_time
+
             final_pred_dict[data_id] = {
                 "steps": steps,
-                "pred_nodes": pred_dict[data_id]["pred_task_nodes"],
-                "pred_links": pred_dict[data_id]["pred_task_links"],
+                "pred_nodes": base_nodes,
+                "pred_links": base_links,
                 "search_nodes": ans["task_nodes"],
                 "search_links": ans["task_links"],
-                "gt_nodes": pred_dict[data_id]["gt_task_nodes"],
-                "gt_links": pred_dict[data_id]["gt_task_links"],
-                "cost_time": time.time() - st_time
+                "gt_nodes": gt_nodes,
+                "gt_links": gt_links,
+                "cost_time": cost_t
             }
-    
+
+            log_sample(
+                fp=log_fp, ds=args.dataset, method="sgc", llm=args.llm_name, seed=0,
+                sid=data_id, success=succ, latency_sec=round(cost_t, 4),
+                tokens_prompt=None, tokens_completion=None,
+                temperature=None, top_p=None, alpha=alpha_val, graphsearch=None,
+                task_steps=steps, task_nodes=search_nodes, task_links=ans["task_links"],
+                err=None
+            )
+
         bi_evaluate(new_alignment_ids, final_pred_dict, tmp_print=True)
+
+    log_fp.close()

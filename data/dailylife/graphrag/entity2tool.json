@@ -1,0 +1,242 @@
+{
+  "get weather": [
+    "get_weather"
+  ],
+  "get_weather": [
+    "get_weather"
+  ],
+  "get news for topic": [
+    "get_news_for_topic"
+  ],
+  "get_news_for_topic": [
+    "get_news_for_topic"
+  ],
+  "stock operation": [
+    "stock_operation"
+  ],
+  "stock_operation": [
+    "stock_operation"
+  ],
+  "book flight": [
+    "book_flight"
+  ],
+  "book_flight": [
+    "book_flight"
+  ],
+  "book hotel": [
+    "book_hotel"
+  ],
+  "book_hotel": [
+    "book_hotel"
+  ],
+  "book restaurant": [
+    "book_restaurant"
+  ],
+  "book_restaurant": [
+    "book_restaurant"
+  ],
+  "book car": [
+    "book_car"
+  ],
+  "book_car": [
+    "book_car"
+  ],
+  "online shopping": [
+    "online_shopping"
+  ],
+  "online_shopping": [
+    "online_shopping"
+  ],
+  "send email": [
+    "send_email"
+  ],
+  "send_email": [
+    "send_email"
+  ],
+  "send sms": [
+    "send_sms"
+  ],
+  "send_sms": [
+    "send_sms"
+  ],
+  "share by social network": [
+    "share_by_social_network"
+  ],
+  "share_by_social_network": [
+    "share_by_social_network"
+  ],
+  "search by engine": [
+    "search_by_engine"
+  ],
+  "search_by_engine": [
+    "search_by_engine"
+  ],
+  "apply for job": [
+    "apply_for_job"
+  ],
+  "apply_for_job": [
+    "apply_for_job"
+  ],
+  "see doctor online": [
+    "see_doctor_online"
+  ],
+  "see_doctor_online": [
+    "see_doctor_online"
+  ],
+  "consult lawyer online": [
+    "consult_lawyer_online"
+  ],
+  "consult_lawyer_online": [
+    "consult_lawyer_online"
+  ],
+  "enroll in course": [
+    "enroll_in_course"
+  ],
+  "enroll_in_course": [
+    "enroll_in_course"
+  ],
+  "buy insurance": [
+    "buy_insurance"
+  ],
+  "buy_insurance": [
+    "buy_insurance"
+  ],
+  "online banking": [
+    "online_banking"
+  ],
+  "online_banking": [
+    "online_banking"
+  ],
+  "daily bill payment": [
+    "daily_bill_payment"
+  ],
+  "daily_bill_payment": [
+    "daily_bill_payment"
+  ],
+  "sell item online": [
+    "sell_item_online"
+  ],
+  "sell_item_online": [
+    "sell_item_online"
+  ],
+  "do tax return": [
+    "do_tax_return"
+  ],
+  "do_tax_return": [
+    "do_tax_return"
+  ],
+  "apply for passport": [
+    "apply_for_passport"
+  ],
+  "apply_for_passport": [
+    "apply_for_passport"
+  ],
+  "pay for credit card": [
+    "pay_for_credit_card"
+  ],
+  "pay_for_credit_card": [
+    "pay_for_credit_card"
+  ],
+  "auto housework by robot": [
+    "auto_housework_by_robot"
+  ],
+  "auto_housework_by_robot": [
+    "auto_housework_by_robot"
+  ],
+  "auto driving to destination": [
+    "auto_driving_to_destination"
+  ],
+  "auto_driving_to_destination": [
+    "auto_driving_to_destination"
+  ],
+  "deliver package": [
+    "deliver_package"
+  ],
+  "deliver_package": [
+    "deliver_package"
+  ],
+  "order food delivery": [
+    "order_food_delivery"
+  ],
+  "order_food_delivery": [
+    "order_food_delivery"
+  ],
+  "order taxi": [
+    "order_taxi"
+  ],
+  "order_taxi": [
+    "order_taxi"
+  ],
+  "play music by title": [
+    "play_music_by_title"
+  ],
+  "play_music_by_title": [
+    "play_music_by_title"
+  ],
+  "play movie by title": [
+    "play_movie_by_title"
+  ],
+  "play_movie_by_title": [
+    "play_movie_by_title"
+  ],
+  "take note": [
+    "take_note"
+  ],
+  "take_note": [
+    "take_note"
+  ],
+  "borrow book online": [
+    "borrow_book_online"
+  ],
+  "borrow_book_online": [
+    "borrow_book_online"
+  ],
+  "recording audio": [
+    "recording_audio"
+  ],
+  "recording_audio": [
+    "recording_audio"
+  ],
+  "make video call": [
+    "make_video_call"
+  ],
+  "make_video_call": [
+    "make_video_call"
+  ],
+  "make voice call": [
+    "make_voice_call"
+  ],
+  "make_voice_call": [
+    "make_voice_call"
+  ],
+  "organize meeting online": [
+    "organize_meeting_online"
+  ],
+  "organize_meeting_online": [
+    "organize_meeting_online"
+  ],
+  "attend meeting online": [
+    "attend_meeting_online"
+  ],
+  "attend_meeting_online": [
+    "attend_meeting_online"
+  ],
+  "software management": [
+    "software_management"
+  ],
+  "software_management": [
+    "software_management"
+  ],
+  "print document": [
+    "print_document"
+  ],
+  "print_document": [
+    "print_document"
+  ],
+  "set alarm": [
+    "set_alarm"
+  ],
+  "set_alarm": [
+    "set_alarm"
+  ]
+}
